@@ -53,7 +53,8 @@ APP_NAME = "glm-5-2-marathon"
 # Compute — 4x B200 node, host RAM for the hierarchical KV-cache offload tier.
 GPU = "B200:4"                     # 4x B200 = 768 GB VRAM. VRAM is fixed by type+count, not tunable.
 CPU = 64.0                         # Modal hard cap: 64 physical cores
-MEMORY_MIB = 1_572_864            # 1.5 TiB; a bit under Modal's 1,650,688 MiB (~1.575 TiB) hard cap
+# MEMORY_MIB = 1_572_864  # max
+MEMORY_MIB = 1_363_149            # 1.3 TiB; easier to schedule than 1.5 TiB (Modal cap is 1,650,688 MiB)
 PORT = 8000
 TP = 4                             # tensor-parallel == GPU count
 STARTUP_TIMEOUT = 3000            # GLM-5.2 nvfp4 load + cuda-graph(bs=96) build is slow

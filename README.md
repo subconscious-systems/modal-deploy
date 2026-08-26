@@ -113,9 +113,9 @@ Notes:
 ## Notes
 
 - **Host RAM cap:** Modal limits a container to **1,650,688 MiB (~1.575 TiB)**
-  of host RAM — this cap does NOT increase with GPU count. `MEMORY_MIB` is set a
-  bit under that at **1,572,864 MiB (1.5 TiB)**. The hierarchical KV-cache
-  offload tier (`--hicache-ratio 8`) is bounded by it.
+  of host RAM — this cap does NOT increase with GPU count. `MEMORY_MIB` is
+  **1,363,149 MiB (1.3 TiB)** to make 4× B200 scheduling easier. The hierarchical
+  KV-cache offload tier (`--hicache-ratio 8`) is bounded by it.
 - **CPU cap:** 64 physical cores max (`CPU = 64.0`).
 - **Cold start:** GLM-5.2 nvfp4 load + cuda-graph(bs=96) build is slow;
   `STARTUP_TIMEOUT = 3000`
