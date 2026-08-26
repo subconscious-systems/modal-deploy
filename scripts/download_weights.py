@@ -1,22 +1,37 @@
-"""One-time job to populate the GLM-5.2-NVFP4 weights Volume from Hugging Face.
+"""One-time job to populate the weights Volume from Hugging Face.
 
-The main model is gated on HF, so this needs the `SUBCONSCIOUS_HF_TOKEN` Modal
-Secret (key: HF_TOKEN), upserted by write_secrets.py. The draft model
-(SubconsciousDev/glm-5.2-fp8-dflash-v2) is NOT downloaded here — sglang fetches
-it at server startup into the HF cache on the warm-cache volume (see deploy.py).
+Downloads both checkpoints sglang needs at serve time:
+
+  - nvidia/GLM-5.2-NVFP4              -> /models/glm-5.2-nvfp4
+  - SubconsciousDev/glm-5.2-fp8-dflash-v2 -> /models/glm-5.2-fp8-dflash-v2
+
+Both are gated, so this needs the `SUBCONSCIOUS_HF_TOKEN` Modal Secret
+(key: HF_TOKEN), upserted by write_secrets.py. After this job, deploy.py
+points `--model-path` and `--speculative-draft-model-path` at those local
+dirs so the GPU container never talks to Hub at startup.
 
 Run:
-    uv run python write_secrets.py            # upsert SUBCONSCIOUS_HF_TOKEN
-    uv run modal run download_weights.py
+    uv run python scripts/write_secrets.py
+    uv run modal run scripts/download_weights.py
 """
 import modal
 
 WEIGHTS_VOLUME = "glm_weights_vol"
 WEIGHTS_MOUNT = "/models"
-MODEL_REPO = "nvidia/GLM-5.2-NVFP4"
-MODEL_REVISION = "aec724e8c7b8ee9db3b48c01c320f63f9cdaf8aa"
-MODEL_DIR = "/models/glm-5.2-nvfp4"
-HF_SECRET = "SUBCONSCIOUS_HF_TOKEN"   # Modal secret (key: HF_TOKEN) upserted by write_secrets.py
+HF_SECRET = "SUBCONSCIOUS_HF_TOKEN"
+
+MODELS = [
+    {
+        "repo_id": "nvidia/GLM-5.2-NVFP4",
+        "revision": "aec724e8c7b8ee9db3b48c01c320f63f9cdaf8aa",
+        "local_dir": "/models/glm-5.2-nvfp4",
+    },
+    {
+        "repo_id": "SubconsciousDev/glm-5.2-fp8-dflash-v2",
+        "revision": None,
+        "local_dir": "/models/glm-5.2-fp8-dflash-v2",
+    },
+]
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -32,22 +47,28 @@ vol = modal.Volume.from_name(WEIGHTS_VOLUME, create_if_missing=True)
     image=image,
     volumes={WEIGHTS_MOUNT: vol},
     secrets=[modal.Secret.from_name(HF_SECRET, required_keys=["HF_TOKEN"])],
-    timeout=7200,  # large model download can take a while
+    timeout=7200,
     cpu=8.0,
-    memory=64 * 1024,  # HF_XET_HIGH_PERFORMANCE wants >= 64 GB for buffering
+    memory=64 * 1024,
 )
 def download():
     from huggingface_hub import snapshot_download
 
-    print(f"Downloading {MODEL_REPO}@{MODEL_REVISION} -> {MODEL_DIR} ...")
-    snapshot_download(
-        repo_id=MODEL_REPO,
-        revision=MODEL_REVISION,
-        local_dir=MODEL_DIR,
-        repo_type="model",
-    )
-    vol.commit()
-    print(f"Done. Weights committed to volume '{WEIGHTS_VOLUME}' at {MODEL_DIR}.")
+    for spec in MODELS:
+        rev = spec["revision"]
+        label = f"{spec['repo_id']}" + (f"@{rev}" if rev else "")
+        print(f"Downloading {label} -> {spec['local_dir']} ...")
+        kwargs = {
+            "repo_id": spec["repo_id"],
+            "local_dir": spec["local_dir"],
+            "repo_type": "model",
+        }
+        if rev:
+            kwargs["revision"] = rev
+        snapshot_download(**kwargs)
+        vol.commit()
+        print(f"  committed {spec['local_dir']}")
+    print(f"Done. Weights on volume '{WEIGHTS_VOLUME}'.")
 
 
 if __name__ == "__main__":

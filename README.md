@@ -14,7 +14,7 @@ modal-exp/
 ├── .env.example            # template for sensitive values (HF token, Docker Hub token)
 ├── scripts/
 │   ├── write_secrets.py    # idempotent upsert of .env secrets into Modal
-│   ├── download_weights.py # one-time job: pull gated nvidia/GLM-5.2-NVFP4 into a Volume
+│   ├── download_weights.py # one-time job: pull GLM-5.2 + DFLASH draft into a Volume
 │   └── test_endpoint.py    # send a sample chat-completion request to the deployed endpoint
 └── README.md
 ```
@@ -37,8 +37,9 @@ cp .env.example .env
 $EDITOR .env                 # HF token + Docker Hub username and access token
 uv run python scripts/write_secrets.py
 
-# 4. Populate the weights Volume once (downloads nvidia/GLM-5.2-NVFP4 at the
-#    pinned commit aec724e8...):
+# 4. Populate the weights Volume once (GLM-5.2-NVFP4 + DFLASH draft). Both
+#    are served from local paths under /models — the GPU container does not
+#    pull from Hugging Face at startup.
 uv run modal run scripts/download_weights.py
 ```
 
@@ -46,8 +47,8 @@ uv run modal run scripts/download_weights.py
 Edit the config block at the top of `deploy.py`:
 - `REGISTRY_IMAGE` → private Docker Hub image (default `subconsciouslabs/sglang-baseten:sm_100-v0.10`)
 - `REGISTRY_SECRET`, `HF_SECRET` → `SUBCONSCIOUS_DOCKERHUB` / `SUBCONSCIOUS_HF_TOKEN` (upserted by `scripts/write_secrets.py`)
-- `WEIGHTS_VOLUME`, `MODEL_PATH` → where the GLM weights live in the Volume
-- `DRAFT_MODEL_PATH` → HF repo id of the DFLASH draft model (downloaded at startup)
+- `WEIGHTS_VOLUME`, `MODEL_PATH` → GLM weights on the Volume (`/models/glm-5.2-nvfp4`)
+- `DRAFT_MODEL_PATH` → DFLASH draft on the same Volume (`/models/glm-5.2-fp8-dflash-v2`)
 - `GPU`, `TP`, `CPU`, `MEMORY_MIB`, `PORT`, `STARTUP_TIMEOUT` → compute/serve config
 
 Then:
@@ -112,14 +113,16 @@ Notes:
 ## Notes
 
 - **Host RAM cap:** Modal limits a container to **1,650,688 MiB (~1.575 TiB)**
-  of host RAM — this cap does NOT increase with GPU count. `MEMORY_MIB` is set to
-  that max. The hierarchical KV-cache offload tier (`--hicache-ratio 8`) is bounded by it.
+  of host RAM — this cap does NOT increase with GPU count. `MEMORY_MIB` is set a
+  bit under that at **1,572,864 MiB (1.5 TiB)**. The hierarchical KV-cache
+  offload tier (`--hicache-ratio 8`) is bounded by it.
 - **CPU cap:** 64 physical cores max (`CPU = 64.0`).
 - **Cold start:** GLM-5.2 nvfp4 load + cuda-graph(bs=96) build is slow;
   `STARTUP_TIMEOUT = 3000`
-- **Warm cache:** compiled kernels (sglang/deep_gemm/flashinfer) and the HF
-  draft-model cache are persisted on Volume `tim_cache_vol` at
-  `/opt/sgl-warm-cache` to speed subsequent cold starts.
+- **Warm cache:** compiled kernels live in the image at `/opt/sgl-warm-cache`.
+  The HF draft-model cache is persisted on Volume `tim_cache_vol` at
+  `/mnt/sgl-warm-cache` (Modal cannot mount over the image's non-empty
+  `/opt/sgl-warm-cache`).
 - **Timeout:** `RUN_TIMEOUT = 86400` (container lifetime per cold cycle). If
   Modal rejects this at deploy (server-side cap), lower it and redeploy.
 
