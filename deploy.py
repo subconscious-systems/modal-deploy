@@ -4,26 +4,26 @@ Deploy GLM-5.2-NVFP4 (model name "glm-5.2-marathon") onto Modal 4x B200s.
 Flow
 ----
 1. The serve image is the prebuilt sm_100 (Blackwell) sglang image at
-   REGISTRY_IMAGE (registry.distr.sh/subconscious/timrun:sm_100-v0.10).
+   REGISTRY_IMAGE (subconsciouslabs/sglang-baseten:sm_100-v0.10 on Docker Hub).
    It must contain the sglang fork with the --subconscious-* / DFLASH / fa4
    features and the /sgl-workspace checkout (incl. the chat template at
-   CHAT_TEMPLATE below). The image is built externally and pushed to distr.
+   CHAT_TEMPLATE below). The image is built externally and pushed to Hub.
 2. Populate the weights Volume once from Hugging Face:
    `uv run modal run scripts/download_weights.py`
 3. `uv run modal deploy deploy.py` -> Modal pulls the serve image (auth via the
-   distr-registry-secret), mounts the weights + warm-cache volumes, and runs
+   Docker Hub secret), mounts the weights + warm-cache volumes, and runs
    the sglang launch server on 4x B200.
    `uv run modal serve deploy.py` does the same but hot-reloads for dev.
 """
 import modal
 
 # ---------------------------------------------------------------------------
-# Configuration — edit these to match your distr registry + model.
+# Configuration — edit these to match your Docker Hub image + model.
 # ---------------------------------------------------------------------------
-REGISTRY_IMAGE = "registry.distr.sh/subconscious/timrun:sm_100-v0.10"
-REGISTRY_SECRET = "SUBCONSCIOUS_DISTR_PAT"
-# ^ Modal Secret (name: SUBCONSCIOUS_DISTR_PAT) with keys REGISTRY_USERNAME + REGISTRY_PASSWORD.
-#   distr's login convention is username "-" with the PAT as the password.
+REGISTRY_IMAGE = "subconsciouslabs/sglang-baseten:sm_100-v0.10"
+REGISTRY_SECRET = "SUBCONSCIOUS_DOCKERHUB"
+# ^ Modal Secret (name: SUBCONSCIOUS_DOCKERHUB) with keys REGISTRY_USERNAME
+#   (Docker Hub username) + REGISTRY_PASSWORD (Docker Hub access token).
 #   Upsert it (idempotently) from .env via:
 #   `uv run python scripts/write_secrets.py`
 

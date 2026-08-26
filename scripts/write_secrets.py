@@ -3,8 +3,8 @@
 
 Reads the repo-root .env (gitignored) and creates/overwrites two Modal secrets:
 
-  - SUBCONSCIOUS_HF_TOKEN   -> { HF_TOKEN: <value> }
-  - SUBCONSCIOUS_DISTR_PAT  -> { REGISTRY_USERNAME: "-", REGISTRY_PASSWORD: <value> }
+  - SUBCONSCIOUS_HF_TOKEN    -> { HF_TOKEN: <value> }
+  - SUBCONSCIOUS_DOCKERHUB   -> { REGISTRY_USERNAME, REGISTRY_PASSWORD }
 
 The Modal secret *names* use the SUBCONSCIOUS_* namespace, but the *keys*
 inside are the names consumers expect:
@@ -37,13 +37,17 @@ SECRET_SPECS: dict[str, dict[str, tuple[str | None, str | None]]] = {
     "SUBCONSCIOUS_HF_TOKEN": {
         "HF_TOKEN": ("SUBCONSCIOUS_HF_TOKEN", None),
     },
-    "SUBCONSCIOUS_DISTR_PAT": {
-        "REGISTRY_USERNAME": (None, "-"),                  # distr login convention
-        "REGISTRY_PASSWORD": ("SUBCONSCIOUS_DISTR_PAT", None),
+    "SUBCONSCIOUS_DOCKERHUB": {
+        "REGISTRY_USERNAME": ("SUBCONSCIOUS_DOCKERHUB_USERNAME", None),
+        "REGISTRY_PASSWORD": ("SUBCONSCIOUS_DOCKERHUB_TOKEN", None),
     },
 }
 
-REQUIRED_ENV = ["SUBCONSCIOUS_HF_TOKEN", "SUBCONSCIOUS_DISTR_PAT"]
+REQUIRED_ENV = [
+    "SUBCONSCIOUS_HF_TOKEN",
+    "SUBCONSCIOUS_DOCKERHUB_USERNAME",
+    "SUBCONSCIOUS_DOCKERHUB_TOKEN",
+]
 
 
 def load_dotenv(path: Path) -> dict[str, str]:

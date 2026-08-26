@@ -2,7 +2,7 @@
 
 Experiment harness for deploying the **GLM-5.2-NVFP4** sglang
 container onto Modal **4× B200** GPUs, pulling the image from a private
-`distr` registry.
+Docker Hub repository.
 
 ## Layout
 
@@ -10,8 +10,8 @@ container onto Modal **4× B200** GPUs, pulling the image from a private
 modal-exp/
 ├── pyproject.toml          # uv env (Python 3.12, modal CLI)
 ├── deploy.py               # Modal app: pulls serve image, runs sglang on 4x B200
-├── Dockerfile              # (optional/legacy) thin serving layer — not used when pulling the prebuilt distr image
-├── .env.example            # template for sensitive values (HF token, distr PAT)
+├── Dockerfile              # (optional/legacy) thin serving layer — not used when pulling the prebuilt Hub image
+├── .env.example            # template for sensitive values (HF token, Docker Hub token)
 ├── scripts/
 │   ├── write_secrets.py    # idempotent upsert of .env secrets into Modal
 │   ├── download_weights.py # one-time job: pull gated nvidia/GLM-5.2-NVFP4 into a Volume
@@ -31,10 +31,10 @@ uv run modal setup            # or: uv run modal token new
 
 # 3. Put your sensitive values in .env (copy from .env.example), then upsert
 #    them idempotently into Modal. This creates two Modal secrets:
-#      SUBCONSCIOUS_HF_TOKEN   (key: HF_TOKEN)
-#      SUBCONSCIOUS_DISTR_PAT  (keys: REGISTRY_USERNAME=- , REGISTRY_PASSWORD=<PAT>)
+#      SUBCONSCIOUS_HF_TOKEN    (key: HF_TOKEN)
+#      SUBCONSCIOUS_DOCKERHUB   (keys: REGISTRY_USERNAME, REGISTRY_PASSWORD)
 cp .env.example .env
-$EDITOR .env                 # fill in SUBCONSCIOUS_HF_TOKEN and SUBCONSCIOUS_DISTR_PAT
+$EDITOR .env                 # HF token + Docker Hub username and access token
 uv run python scripts/write_secrets.py
 
 # 4. Populate the weights Volume once (downloads nvidia/GLM-5.2-NVFP4 at the
@@ -44,8 +44,8 @@ uv run modal run scripts/download_weights.py
 
 ## Deploy
 Edit the config block at the top of `deploy.py`:
-- `REGISTRY_IMAGE` → your pushed distr image (default `registry.distr.sh/subconscious/timrun:sm_100-v0.10`)
-- `REGISTRY_SECRET`, `HF_SECRET` → `SUBCONSCIOUS_DISTR_PAT` / `SUBCONSCIOUS_HF_TOKEN` (upserted by `scripts/write_secrets.py`)
+- `REGISTRY_IMAGE` → private Docker Hub image (default `subconsciouslabs/sglang-baseten:sm_100-v0.10`)
+- `REGISTRY_SECRET`, `HF_SECRET` → `SUBCONSCIOUS_DOCKERHUB` / `SUBCONSCIOUS_HF_TOKEN` (upserted by `scripts/write_secrets.py`)
 - `WEIGHTS_VOLUME`, `MODEL_PATH` → where the GLM weights live in the Volume
 - `DRAFT_MODEL_PATH` → HF repo id of the DFLASH draft model (downloaded at startup)
 - `GPU`, `TP`, `CPU`, `MEMORY_MIB`, `PORT`, `STARTUP_TIMEOUT` → compute/serve config
@@ -100,7 +100,7 @@ uv run modal shell deploy.py
 
 # Manage the backing storage
 uv run modal volume list                  # glm_weights_vol, tim_cache_vol
-uv run modal secret list                  # SUBCONSCIOUS_HF_TOKEN, SUBCONSCIOUS_DISTR_PAT
+uv run modal secret list                  # SUBCONSCIOUS_HF_TOKEN, SUBCONSCIOUS_DOCKERHUB
 ```
 
 Notes:
