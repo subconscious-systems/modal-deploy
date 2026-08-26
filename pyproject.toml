@@ -1,7 +1,7 @@
 [project]
-name = "modal-exp"
+name = "modal-deploy"
 version = "0.1.0"
-description = "Experiments for deploying the timrun container onto Modal GPUs"
+description = "Deploy the timrun GLM-5.2 container onto Modal GPUs"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "modal>=0.71.0",

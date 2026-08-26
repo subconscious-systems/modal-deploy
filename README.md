@@ -1,4 +1,4 @@
-# modal-exp
+# modal-deploy
 
 Experiment harness for deploying the **GLM-5.2-NVFP4** sglang
 container onto Modal **4× B200** GPUs, pulling the image from a private
@@ -7,7 +7,7 @@ Docker Hub repository.
 ## Layout
 
 ```
-modal-exp/
+modal-deploy/
 ├── pyproject.toml          # uv env (Python 3.12, modal CLI)
 ├── deploy.py               # Modal app: pulls serve image, runs sglang on 4x B200
 ├── Dockerfile              # (optional/legacy) thin serving layer — not used when pulling the prebuilt Hub image
