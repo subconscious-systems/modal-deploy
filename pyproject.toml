@@ -1,0 +1,13 @@
+[project]
+name = "modal-exp"
+version = "0.1.0"
+description = "Experiments for deploying the timrun container onto Modal GPUs"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "modal>=0.71.0",
+]
+
+[tool.uv]
+# Keep the local dev env lean: we only need the Modal CLI here to drive
+# `modal deploy` / `modal serve`. The heavy deps (sglang, fastapi, transformers)
+# are installed inside the Modal container image, not locally.
