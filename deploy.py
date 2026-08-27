@@ -3,34 +3,68 @@ Deploy GLM-5.2-NVFP4 (model name "glm-5.2-marathon") onto Modal 4x B200s.
 
 Flow
 ----
-1. The serve image is the prebuilt sm_100 (Blackwell) sglang image at
-   REGISTRY_IMAGE (subconsciouslabs/sglang-baseten:sm_100-v0.10 on Docker Hub).
-   It must contain the sglang fork with the --subconscious-* / DFLASH / fa4
-   features and the /sgl-workspace checkout (incl. the chat template at
-   CHAT_TEMPLATE below). The image is built externally and pushed to Hub.
+1. The serve image is a prebuilt sm_100 (Blackwell) sglang image. Which
+   image and registry secret to use are read from .env at deploy time:
+     ORANGELINE_IMAGE_NAME   
+     DOCKER_TOKEN_SECRET     
+   Those Modal secrets are upserted by write_secrets.py from username+token
+   pairs in .env. The image must contain the sglang fork with the
+   --subconscious-* / DFLASH / fa4 features and the /sgl-workspace checkout
+   (incl. the chat template at CHAT_TEMPLATE).
 2. Populate the weights Volume once from Hugging Face:
    `uv run modal run scripts/download_weights.py`
    Serve reads local paths `/models/glm-5.2-nvfp4` and
    `/models/glm-5.2-fp8-dflash-v2` — no Hub fetch at GPU startup.
-3. `uv run modal deploy deploy.py` -> Modal pulls the serve image (auth via the
-   Docker Hub secret), mounts the weights + warm-cache volumes, and runs
+3. `uv run modal deploy deploy.py` -> Modal pulls the serve image (auth via
+   DOCKER_TOKEN_SECRET), mounts the weights + warm-cache volumes, and runs
    the sglang launch server on 4x B200.
    `uv run modal serve deploy.py` does the same but hot-reloads for dev.
 """
+from __future__ import annotations
+
+import os
 import subprocess
 import sys
+from pathlib import Path
 
 import modal
 
 # ---------------------------------------------------------------------------
-# Configuration — edit these to match your Docker Hub image + model.
+# Configuration — image + registry secret from .env (see .env.example).
+# Remaining knobs below are the model / compute settings.
 # ---------------------------------------------------------------------------
-REGISTRY_IMAGE = "subconsciouslabs/sglang-baseten:sm_100-v0.10"
-REGISTRY_SECRET = "SUBCONSCIOUS_DOCKERHUB"
-# ^ Modal Secret (name: SUBCONSCIOUS_DOCKERHUB) with keys REGISTRY_USERNAME
-#   (Docker Hub username) + REGISTRY_PASSWORD (Docker Hub access token).
-#   Upsert it (idempotently) from .env via:
-#   `uv run python scripts/write_secrets.py`
+
+_ENV_PATH = Path(__file__).resolve().parent / ".env"
+_DEFAULT_IMAGE = "subconsciouslabs/sglang-baseten:sm_100-v0.12"
+_DEFAULT_TOKEN_SECRET = "SUBCONSCIOUS_DOCKERHUB"
+
+
+def _load_dotenv(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    out: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        out[k.strip()] = v.strip().strip('"').strip("'")
+    return out
+
+
+def _env(name: str, default: str | None = None) -> str | None:
+    """Process env wins over .env; empty values fall through."""
+    val = os.environ.get(name) or _DOTENV.get(name)
+    return val if val else default
+
+
+_DOTENV = _load_dotenv(_ENV_PATH)
+
+ORANGELINE_IMAGE_NAME = _env("ORANGELINE_IMAGE_NAME", _DEFAULT_IMAGE)
+DOCKER_TOKEN_SECRET = _env("DOCKER_TOKEN_SECRET", _DEFAULT_TOKEN_SECRET)
+# ^ Modal secret with keys REGISTRY_USERNAME + REGISTRY_PASSWORD, upserted
+#   by `uv run python scripts/write_secrets.py` as either
+#   SUBCONSCIOUS_DOCKERHUB or SUBCONSCIOUS_DISTR_HUB.
 
 HF_SECRET = "SUBCONSCIOUS_HF_TOKEN"
 # ^ Modal Secret (name: SUBCONSCIOUS_HF_TOKEN) with key HF_TOKEN. Weights are
@@ -42,7 +76,7 @@ WEIGHTS_VOLUME = "glm_weights_vol"      # main + draft checkpoints under /models
 WEIGHTS_MOUNT = "/models"
 CACHE_VOLUME = "tim_cache_vol"          # runtime caches (not model weights)
 CACHE_MOUNT = "/mnt/sgl-warm-cache"     # empty path; Modal cannot overlay a non-empty dir
-IMAGE_WARM_CACHE = "/opt/sgl-warm-cache"  # baked kernel cache in the Hub image; leave it in place
+IMAGE_WARM_CACHE = "/opt/sgl-warm-cache"  # baked kernel cache in the serve image; leave it in place
 
 # Model settings — local paths on WEIGHTS_VOLUME (not Hugging Face repo ids).
 MODEL_PATH = "/models/glm-5.2-nvfp4"
@@ -67,9 +101,9 @@ RUN_TIMEOUT = 86400               # max container lifetime per cold cycle; watch
 # ---------------------------------------------------------------------------
 image = (
     modal.Image.from_registry(
-        REGISTRY_IMAGE,
+        ORANGELINE_IMAGE_NAME,
         secret=modal.Secret.from_name(
-            REGISTRY_SECRET,
+            DOCKER_TOKEN_SECRET,
             required_keys=["REGISTRY_USERNAME", "REGISTRY_PASSWORD"],
         ),
         setup_dockerfile_commands=[

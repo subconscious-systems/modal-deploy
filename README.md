@@ -1,8 +1,9 @@
 # modal-deploy
 
 Experiment harness for deploying the **GLM-5.2-NVFP4** sglang
-container onto Modal **4× B200** GPUs, pulling the image from a private
-Docker Hub repository.
+container onto Modal **4× B200** GPUs. The serve image is pulled from
+either a private Docker Hub repository or a private `distr`
+(`registry.distr.sh`) registry — selected by `.env` at deploy time.
 
 ## Layout
 
@@ -10,8 +11,8 @@ Docker Hub repository.
 modal-deploy/
 ├── pyproject.toml          # uv env (Python 3.12, modal CLI)
 ├── deploy.py               # Modal app: pulls serve image, runs sglang on 4x B200
-├── Dockerfile              # (optional/legacy) thin serving layer — not used when pulling the prebuilt Hub image
-├── .env.example            # template for sensitive values (HF token, Docker Hub token)
+├── Dockerfile              # (optional/legacy) thin serving layer — not used when pulling the prebuilt serve image
+├── .env.example            # template: HF + Hub/distr creds, plus deploy image/secret
 ├── scripts/
 │   ├── write_secrets.py    # idempotent upsert of .env secrets into Modal
 │   ├── download_weights.py # one-time job: pull GLM-5.2 + DFLASH draft into a Volume
@@ -32,11 +33,14 @@ uv sync
 uv run modal setup            # or: uv run modal token new
 
 # 3. Put your sensitive values in .env (copy from .env.example), then upsert
-#    them idempotently into Modal. This creates two Modal secrets:
+#    them idempotently into Modal:
 #      SUBCONSCIOUS_HF_TOKEN    (key: HF_TOKEN)
 #      SUBCONSCIOUS_DOCKERHUB   (keys: REGISTRY_USERNAME, REGISTRY_PASSWORD)
+#      SUBCONSCIOUS_DISTR_HUB   (same keys; optional, if DISTR_* is set)
+#    deploy.py reads DOCKER_TOKEN_SECRET (which of those registry secrets
+#    to use) and ORANGELINE_IMAGE_NAME (which image to pull).
 cp .env.example .env
-$EDITOR .env                 # HF token + Docker Hub username and access token
+$EDITOR .env                 # HF token + Hub and/or distr username+token
 uv run python scripts/write_secrets.py
 
 # 4. Populate the weights Volume once (GLM-5.2-NVFP4 + DFLASH draft). Both
@@ -46,9 +50,21 @@ uv run modal run scripts/download_weights.py
 ```
 
 ## Deploy
-Edit the config block at the top of `deploy.py`:
-- `REGISTRY_IMAGE` → private Docker Hub image (default `subconsciouslabs/sglang-baseten:sm_100-v0.10`)
-- `REGISTRY_SECRET`, `HF_SECRET` → `SUBCONSCIOUS_DOCKERHUB` / `SUBCONSCIOUS_HF_TOKEN` (upserted by `scripts/write_secrets.py`)
+
+`write_secrets.py` combines username+token into a Modal secret. `deploy.py`
+then picks which secret and which image to use:
+
+- `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` → `SUBCONSCIOUS_DOCKERHUB`
+- `DISTR_USERNAME` + `DISTR_TOKEN` → `SUBCONSCIOUS_DISTR_HUB`
+- `DOCKER_TOKEN_SECRET` → `SUBCONSCIOUS_DOCKERHUB` or `SUBCONSCIOUS_DISTR_HUB`
+- `ORANGELINE_IMAGE_NAME` → e.g. `subconsciouslabs/sglang-baseten:sm_100-v0.10`
+  or `registry.distr.sh/subconscious/timrun:sm_100-v0.10`
+
+Keep both secrets in Modal if you want; switch registries by changing
+`DOCKER_TOKEN_SECRET` and `ORANGELINE_IMAGE_NAME`.
+
+Other knobs live in the config block at the top of `deploy.py`:
+- `HF_SECRET` → `SUBCONSCIOUS_HF_TOKEN` (upserted by `scripts/write_secrets.py`)
 - `WEIGHTS_VOLUME`, `MODEL_PATH` → GLM weights on the Volume (`/models/glm-5.2-nvfp4`)
 - `DRAFT_MODEL_PATH` → DFLASH draft on the same Volume (`/models/glm-5.2-fp8-dflash-v2`)
 - `GPU`, `TP`, `CPU`, `MEMORY_MIB`, `PORT`, `STARTUP_TIMEOUT` → compute/serve config
@@ -74,22 +90,26 @@ uv run python scripts/test_endpoint.py https://<workspace>--glm-5-2-marathon.mod
 ## Run Claude Code against it
 
 `scripts/run_claude.sh` points Claude Code at the deployed endpoint for this
-process only (env vars, same idea as `subc claude`). Extra args go to `claude`.
+process only (env vars, same idea as `subc claude`). An `http(s)://` arg sets
+the endpoint; other args go to `claude`.
 
 ```bash
 ./scripts/run_claude.sh
 ./scripts/run_claude.sh --continue
+./scripts/run_claude.sh https://<workspace>--glm-5-2-marathon.modal.run
 ```
 
 ## Run OpenCode against it
 
 `scripts/run_opencode.sh` does the same for OpenCode: ephemeral
 `OPENCODE_CONFIG_CONTENT` (like `subc opencode`), nothing written to
-`~/.opencode/`. Extra args go to `opencode`.
+`~/.opencode/`. An `http(s)://` arg sets the endpoint; other args go to
+`opencode`.
 
 ```bash
 ./scripts/run_opencode.sh
 ./scripts/run_opencode.sh --continue
+./scripts/run_opencode.sh https://<workspace>--glm-5-2-marathon.modal.run
 ```
 
 ## Lifecycle: deploy / serve / stop / etc.
@@ -124,7 +144,7 @@ uv run modal shell deploy.py
 
 # Manage the backing storage
 uv run modal volume list                  # glm_weights_vol, tim_cache_vol
-uv run modal secret list                  # SUBCONSCIOUS_HF_TOKEN, SUBCONSCIOUS_DOCKERHUB
+uv run modal secret list                  # SUBCONSCIOUS_HF_TOKEN, SUBCONSCIOUS_DOCKERHUB, SUBCONSCIOUS_DISTR_HUB
 ```
 
 Notes:

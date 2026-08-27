@@ -5,19 +5,33 @@
 # Usage:
 #   ./scripts/run_opencode.sh
 #   ./scripts/run_opencode.sh --continue
+#   ./scripts/run_opencode.sh https://<workspace>--glm-5-2-marathon.modal.run
+#   ./scripts/run_opencode.sh https://... --continue
 
 set -euo pipefail
 
+ENDPOINT="https://subconscious-systems--glm-5-2-marathon.modal.run"
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == http://* || "$arg" == https://* ]]; then
+    ENDPOINT="$arg"
+  else
+    ARGS+=("$arg")
+  fi
+done
+ENDPOINT="${ENDPOINT%/}"
+ENDPOINT="${ENDPOINT%/v1}"
+
 export OPENCODE_API_KEY="dummy"
-export OPENCODE_CONFIG_CONTENT=$(cat <<'EOF'
+export OPENCODE_CONFIG_CONTENT=$(cat <<EOF
 {
-  "$schema": "https://opencode.ai/config.json",
+  "\$schema": "https://opencode.ai/config.json",
   "provider": {
     "modal": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "Modal GLM-5.2",
       "options": {
-        "baseURL": "https://subconscious-systems--glm-5-2-marathon.modal.run/v1",
+        "baseURL": "${ENDPOINT}/v1",
         "apiKey": "{env:OPENCODE_API_KEY}"
       },
       "models": {
@@ -40,4 +54,4 @@ if ! command -v opencode >/dev/null 2>&1; then
   exit 127
 fi
 
-exec opencode "$@"
+exec opencode ${ARGS[@]+"${ARGS[@]}"}

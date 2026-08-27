@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Idempotent upsert of local .env secrets into Modal.
 
-Reads the repo-root .env (gitignored) and creates/overwrites two Modal secrets:
+Reads the repo-root .env (gitignored) and creates/overwrites Modal secrets:
 
-  - SUBCONSCIOUS_HF_TOKEN    -> { HF_TOKEN: <value> }
-  - SUBCONSCIOUS_DOCKERHUB   -> { REGISTRY_USERNAME, REGISTRY_PASSWORD }
+  - SUBCONSCIOUS_HF_TOKEN    -> { HF_TOKEN }                                 (required)
+  - SUBCONSCIOUS_DOCKERHUB   -> { REGISTRY_USERNAME, REGISTRY_PASSWORD }     (if Hub pair set)
+  - SUBCONSCIOUS_DISTR_HUB   -> { REGISTRY_USERNAME, REGISTRY_PASSWORD }     (if distr pair set)
 
-The Modal secret *names* use the SUBCONSCIOUS_* namespace, but the *keys*
-inside are the names consumers expect:
-  - huggingface_hub / sglang reads `HF_TOKEN`
-  - modal.Image.from_registry reads `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`
+Username + token are combined into one Modal secret per registry so
+`modal.Image.from_registry` can read `REGISTRY_USERNAME` / `REGISTRY_PASSWORD`.
 
 `modal secret create ... --force` is an upsert (create-or-overwrite), so this
 is safe to re-run whenever values change. Secret values are passed to the
@@ -32,22 +31,15 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENV_PATH = REPO_ROOT / ".env"
 
-# Modal secret name -> { internal_key: (env_var | None, literal_value | None) }
-SECRET_SPECS: dict[str, dict[str, tuple[str | None, str | None]]] = {
-    "SUBCONSCIOUS_HF_TOKEN": {
-        "HF_TOKEN": ("SUBCONSCIOUS_HF_TOKEN", None),
-    },
-    "SUBCONSCIOUS_DOCKERHUB": {
-        "REGISTRY_USERNAME": ("SUBCONSCIOUS_DOCKERHUB_USERNAME", None),
-        "REGISTRY_PASSWORD": ("SUBCONSCIOUS_DOCKERHUB_TOKEN", None),
-    },
-}
+HF_SECRET_NAME = "SUBCONSCIOUS_HF_TOKEN"
+DOCKERHUB_SECRET_NAME = "SUBCONSCIOUS_DOCKERHUB"
+DISTR_SECRET_NAME = "SUBCONSCIOUS_DISTR_HUB"
 
-REQUIRED_ENV = [
-    "SUBCONSCIOUS_HF_TOKEN",
-    "SUBCONSCIOUS_DOCKERHUB_USERNAME",
-    "SUBCONSCIOUS_DOCKERHUB_TOKEN",
-]
+# Optional registry secret -> (username env var, token env var)
+REGISTRY_SPECS: tuple[tuple[str, str, str], ...] = (
+    (DOCKERHUB_SECRET_NAME, "DOCKERHUB_USERNAME", "DOCKERHUB_TOKEN"),
+    (DISTR_SECRET_NAME, "DISTR_USERNAME", "DISTR_TOKEN"),
+)
 
 
 def load_dotenv(path: Path) -> dict[str, str]:
@@ -93,13 +85,45 @@ def upsert_secret(name: str, kv: dict[str, str]) -> None:
 
 def main() -> None:
     env = load_dotenv(ENV_PATH)
-    missing = [k for k in REQUIRED_ENV if not env.get(k)]
-    if missing:
-        sys.exit(f"error: missing/empty values in .env: {', '.join(missing)}")
-    print(f"Loaded {len(REQUIRED_ENV)} value(s) from {ENV_PATH}; upserting into Modal...")
-    for secret_name, spec in SECRET_SPECS.items():
-        kv = {key: (literal if literal is not None else env[env_var]) for key, (env_var, literal) in spec.items()}
-        upsert_secret(secret_name, kv)
+
+    hf_token = env.get("SUBCONSCIOUS_HF_TOKEN")
+    if not hf_token:
+        sys.exit("error: missing/empty SUBCONSCIOUS_HF_TOKEN in .env")
+
+    pairs: list[tuple[str, str, str]] = []
+    skipped: list[str] = []
+    for secret_name, user_var, token_var in REGISTRY_SPECS:
+        user, token = env.get(user_var), env.get(token_var)
+        if user and token:
+            pairs.append((secret_name, user, token))
+        elif user or token:
+            sys.exit(
+                f"error: {user_var} and {token_var} must both be set to upsert "
+                f"'{secret_name}' (got "
+                f"{user_var}={'set' if user else 'empty'}, "
+                f"{token_var}={'set' if token else 'empty'})"
+            )
+        else:
+            skipped.append(f"  · skipping '{secret_name}' (no {user_var}/{token_var})")
+
+    if not pairs:
+        sys.exit(
+            "error: provide at least one registry pair in .env: "
+            "DOCKERHUB_USERNAME+DOCKERHUB_TOKEN and/or DISTR_USERNAME+DISTR_TOKEN"
+        )
+
+    print(
+        f"Loaded HF token + {len(pairs)} registry secret(s) from {ENV_PATH};"
+        " upserting into Modal..."
+    )
+    upsert_secret(HF_SECRET_NAME, {"HF_TOKEN": hf_token})
+    for secret_name, user, token in pairs:
+        upsert_secret(
+            secret_name,
+            {"REGISTRY_USERNAME": user, "REGISTRY_PASSWORD": token},
+        )
+    for line in skipped:
+        print(line)
     print("Done. Verify with:  uv run modal secret list")
 
 

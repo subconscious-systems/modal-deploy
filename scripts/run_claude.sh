@@ -5,12 +5,26 @@
 # Usage:
 #   ./scripts/run_claude.sh
 #   ./scripts/run_claude.sh --continue
+#   ./scripts/run_claude.sh https://<workspace>--glm-5-2-marathon.modal.run
+#   ./scripts/run_claude.sh https://... --continue
 
 set -euo pipefail
 
 MODEL="glm-5.2[1m]"
 
-export ANTHROPIC_BASE_URL="https://subconscious-systems--glm-5-2-marathon.modal.run"
+ENDPOINT="https://subconscious-systems--glm-5-2-marathon.modal.run"
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == http://* || "$arg" == https://* ]]; then
+    ENDPOINT="$arg"
+  else
+    ARGS+=("$arg")
+  fi
+done
+ENDPOINT="${ENDPOINT%/}"
+ENDPOINT="${ENDPOINT%/v1}"
+
+export ANTHROPIC_BASE_URL="$ENDPOINT"
 export ANTHROPIC_AUTH_TOKEN="dummy"
 export ANTHROPIC_MODEL="$MODEL"
 export ANTHROPIC_SMALL_FAST_MODEL="$MODEL"
@@ -29,4 +43,4 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 127
 fi
 
-exec claude "$@"
+exec claude ${ARGS[@]+"${ARGS[@]}"}
