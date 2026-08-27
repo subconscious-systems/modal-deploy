@@ -118,6 +118,11 @@ image = (
             "SGLANG_CACHE_DIR": f"{IMAGE_WARM_CACHE}/sglang",
             "SGLANG_DG_CACHE_DIR": f"{IMAGE_WARM_CACHE}/deep_gemm",
             "FLASHINFER_WORKSPACE_BASE": f"{IMAGE_WARM_CACHE}/flashinfer",
+            "FLASH_ATTENTION_CUTE_DSL_CACHE_ENABLED": "1",
+            "FLASH_ATTENTION_CUTE_DSL_CACHE_DIR": f"{IMAGE_WARM_CACHE}/fa4",
+            "TRITON_CACHE_DIR": f"{IMAGE_WARM_CACHE}/triton",
+            "TORCHINDUCTOR_CACHE_DIR": f"{IMAGE_WARM_CACHE}/torch-inductor",
+            "TVM_FFI_CACHE_DIR": f"{IMAGE_WARM_CACHE}/tvm-ffi",
             # Draft model download persists on the volume; /tmp is ephemeral on Modal.
             "HF_HOME": f"{CACHE_MOUNT}/hf",
             # Unbuffered so sglang logs show up during the long weight-load.
