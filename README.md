@@ -15,7 +15,9 @@ modal-deploy/
 ├── scripts/
 │   ├── write_secrets.py    # idempotent upsert of .env secrets into Modal
 │   ├── download_weights.py # one-time job: pull GLM-5.2 + DFLASH draft into a Volume
-│   └── test_endpoint.py    # send a sample chat-completion request to the deployed endpoint
+│   ├── test_endpoint.py    # send a sample chat-completion request to the deployed endpoint
+│   ├── run_claude.sh       # launch Claude Code against the Modal endpoint
+│   └── run_opencode.sh     # launch OpenCode against the Modal endpoint
 └── README.md
 ```
 
@@ -66,7 +68,28 @@ the deployed endpoint and prints the streamed tokens. No extra deps — it uses
 
 ```bash
 # After deploy, copy the URL it prints (or `uv run modal app list`):
-uv run python scripts/test_endpoint.py https://<workspace>--glm-5.2-marathon.modal.run
+uv run python scripts/test_endpoint.py https://<workspace>--glm-5-2-marathon.modal.run
+```
+
+## Run Claude Code against it
+
+`scripts/run_claude.sh` points Claude Code at the deployed endpoint for this
+process only (env vars, same idea as `subc claude`). Extra args go to `claude`.
+
+```bash
+./scripts/run_claude.sh
+./scripts/run_claude.sh --continue
+```
+
+## Run OpenCode against it
+
+`scripts/run_opencode.sh` does the same for OpenCode: ephemeral
+`OPENCODE_CONFIG_CONTENT` (like `subc opencode`), nothing written to
+`~/.opencode/`. Extra args go to `opencode`.
+
+```bash
+./scripts/run_opencode.sh
+./scripts/run_opencode.sh --continue
 ```
 
 ## Lifecycle: deploy / serve / stop / etc.

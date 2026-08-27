@@ -109,7 +109,7 @@ cache_vol = modal.Volume.from_name(CACHE_VOLUME, create_if_missing=True)
     volumes={WEIGHTS_MOUNT: weights_vol, CACHE_MOUNT: cache_vol},
     secrets=[modal.Secret.from_name(HF_SECRET, required_keys=["HF_TOKEN"])],
     scaledown_window=600,
-    min_containers=0,
+    min_containers=1,
     max_containers=1,
     timeout=RUN_TIMEOUT,
 )

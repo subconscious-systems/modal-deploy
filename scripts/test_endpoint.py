@@ -31,6 +31,8 @@ async def main(url: str) -> None:
                 if not line or line == "data: [DONE]" or not line.startswith("data: "):
                     continue
                 chunk = json.loads(line[len("data: "):])
+                if "choices" not in chunk:
+                    continue
                 delta = chunk["choices"][0].get("delta", {})
                 content = delta.get("content") or delta.get("reasoning_content")
                 if content:
