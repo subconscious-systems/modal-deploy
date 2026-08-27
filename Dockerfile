@@ -1,17 +1,16 @@
 # Thin serving layer on top of the heavy timrun base image.
 #
-# Stage 1: build the base from timrun-sys/docker/Dockerfile and push it to your
-#          distr registry as timrun-base (see scripts/build_push.sh).
-# Stage 2: build THIS Dockerfile (FROM timrun-base) and push as timrun-serve.
-#          This is the image Modal pulls in deploy.py.
+# Stage 1: build the base from timrun-sys/docker/Dockerfile and push it to
+#          Docker Hub as the base tag.
+# Stage 2: build THIS Dockerfile (FROM that base) and push as the serve tag.
+#          This is not used when deploy.py pulls the prebuilt Hub image.
 #
 # Build:
 #   docker build \
-#     --build-arg BASE_IMAGE=distr-registry.example.com:5000/timrun-base:latest \
-#     -t distr-registry.example.com:5000/timrun-serve:latest .
-# (scripts/build_push.sh does both stages for you.)
+#     --build-arg BASE_IMAGE=subconsciouslabs/sglang-baseten:sm_100-v0.12 \
+#     -t subconsciouslabs/sglang-baseten:sm_100-v0.12-serve .
 
-ARG BASE_IMAGE=distr-registry.example.com:5000/timrun-base:latest
+ARG BASE_IMAGE=subconsciouslabs/sglang-baseten:sm_100-v0.12
 FROM ${BASE_IMAGE}
 
 # Modal's runtime expects `python` and `pip` on PATH. The timrun base image

@@ -3,12 +3,13 @@ Deploy GLM-5.2-NVFP4 (model name "glm-5.2-marathon") onto Modal 4x B200s.
 
 Flow
 ----
-1. The serve image is a prebuilt sm_100 (Blackwell) sglang image. Which
-   image and registry secret to use are read from .env at deploy time:
-     ORANGELINE_IMAGE_NAME   
-     DOCKER_TOKEN_SECRET     
-   Those Modal secrets are upserted by write_secrets.py from username+token
-   pairs in .env. The image must contain the sglang fork with the
+1. The serve image is a prebuilt sm_100 (Blackwell) sglang image pulled
+   from Docker Hub. Image and registry secret are read from .env at
+   deploy time:
+     ORANGELINE_IMAGE_NAME   (e.g. subconsciouslabs/sglang-baseten:sm_100-v0.12)
+     DOCKER_TOKEN_SECRET     (SUBCONSCIOUS_DOCKERHUB)
+   That Modal secret is upserted by write_secrets.py from DOCKERHUB_USERNAME
+   + DOCKERHUB_TOKEN. The image must contain the sglang fork with the
    --subconscious-* / DFLASH / fa4 features and the /sgl-workspace checkout
    (incl. the chat template at CHAT_TEMPLATE).
 2. Populate the weights Volume once from Hugging Face:
@@ -63,8 +64,7 @@ _DOTENV = _load_dotenv(_ENV_PATH)
 ORANGELINE_IMAGE_NAME = _env("ORANGELINE_IMAGE_NAME", _DEFAULT_IMAGE)
 DOCKER_TOKEN_SECRET = _env("DOCKER_TOKEN_SECRET", _DEFAULT_TOKEN_SECRET)
 # ^ Modal secret with keys REGISTRY_USERNAME + REGISTRY_PASSWORD, upserted
-#   by `uv run python scripts/write_secrets.py` as either
-#   SUBCONSCIOUS_DOCKERHUB or SUBCONSCIOUS_DISTR_HUB.
+#   by `uv run python scripts/write_secrets.py` as SUBCONSCIOUS_DOCKERHUB.
 
 HF_SECRET = "SUBCONSCIOUS_HF_TOKEN"
 # ^ Modal Secret (name: SUBCONSCIOUS_HF_TOKEN) with key HF_TOKEN. Weights are
