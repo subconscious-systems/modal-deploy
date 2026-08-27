@@ -5,12 +5,12 @@
 # Usage:
 #   ./scripts/run_opencode.sh
 #   ./scripts/run_opencode.sh --continue
-#   ./scripts/run_opencode.sh https://<workspace>--glm-5-2-marathon.modal.run
+#   ./scripts/run_opencode.sh https://<workspace>--glm-5-2-fp8-marathon.modal.run
 #   ./scripts/run_opencode.sh https://... --continue
 
 set -euo pipefail
 
-ENDPOINT="https://subconscious-systems--glm-5-2-marathon.modal.run"
+ENDPOINT="https://subconscious-systems--glm-5-2-fp8-marathon.modal.run"
 ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == http://* || "$arg" == https://* ]]; then
@@ -35,7 +35,7 @@ export OPENCODE_CONFIG_CONTENT=$(cat <<EOF
         "apiKey": "{env:OPENCODE_API_KEY}"
       },
       "models": {
-        "glm-5.2-nvfp4": {
+        "glm-5.2-fp8": {
           "name": "GLM-5.2",
           "tools": true,
           "limit": { "context": 1000000, "output": 65536 }
@@ -43,7 +43,7 @@ export OPENCODE_CONFIG_CONTENT=$(cat <<EOF
       }
     }
   },
-  "model": "modal/glm-5.2-nvfp4"
+  "model": "modal/glm-5.2-fp8"
 }
 EOF
 )

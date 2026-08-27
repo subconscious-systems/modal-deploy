@@ -2,7 +2,7 @@
 """Send a sample streaming chat-completion request to the deployed endpoint.
 
 Usage:
-    uv run python scripts/test_endpoint.py https://<workspace>--glm-5.2-marathon.modal.run
+    uv run python scripts/test_endpoint.py https://<workspace>--glm-5-2-fp8-marathon.modal.run
 """
 import asyncio
 import json
@@ -18,7 +18,7 @@ async def main(url: str) -> None:
     import aiohttp
 
     url = url.rstrip("/") + "/v1/chat/completions"
-    payload = {"messages": MESSAGES, "model": "glm-5.2-nvfp4", "stream": True}
+    payload = {"messages": MESSAGES, "model": "glm-5.2-fp8", "stream": True}
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url, json=payload, headers={"Accept": "text/event-stream"}

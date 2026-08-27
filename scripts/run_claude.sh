@@ -5,14 +5,14 @@
 # Usage:
 #   ./scripts/run_claude.sh
 #   ./scripts/run_claude.sh --continue
-#   ./scripts/run_claude.sh https://<workspace>--glm-5-2-marathon.modal.run
+#   ./scripts/run_claude.sh https://<workspace>--glm-5-2-fp8-marathon.modal.run
 #   ./scripts/run_claude.sh https://... --continue
 
 set -euo pipefail
 
 MODEL="glm-5.2[1m]"
 
-ENDPOINT="https://subconscious-systems--glm-5-2-marathon.modal.run"
+ENDPOINT="https://subconscious-systems--glm-5-2-fp8-marathon.modal.run"
 ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == http://* || "$arg" == https://* ]]; then

@@ -1,5 +1,5 @@
 """
-Deploy GLM-5.2-NVFP4 (model name "glm-5.2-marathon") onto Modal 4x B200s.
+Deploy GLM-5.2-FP8 (model name "glm-5-2-fp8-marathon") onto Modal 8x B200s.
 
 Flow
 ----
@@ -14,11 +14,11 @@ Flow
    (incl. the chat template at CHAT_TEMPLATE).
 2. Populate the weights Volume once from Hugging Face:
    `uv run modal run scripts/download_weights.py`
-   Serve reads local paths `/models/glm-5.2-nvfp4` and
+   Serve reads local paths `/models/glm-5.2-fp8` and
    `/models/glm-5.2-fp8-dflash-v2` — no Hub fetch at GPU startup.
 3. `uv run modal deploy deploy.py` -> Modal pulls the serve image (auth via
    DOCKER_TOKEN_SECRET), mounts the weights + warm-cache volumes, and runs
-   the sglang launch server on 4x B200.
+   the sglang launch server on Nx B200.
    `uv run modal serve deploy.py` does the same but hot-reloads for dev.
 """
 from __future__ import annotations
@@ -36,7 +36,6 @@ import modal
 # ---------------------------------------------------------------------------
 
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
-_DEFAULT_IMAGE = "subconsciouslabs/sglang-baseten:sm_100-v0.12"
 _DEFAULT_TOKEN_SECRET = "SUBCONSCIOUS_DOCKERHUB"
 
 
@@ -61,7 +60,13 @@ def _env(name: str, default: str | None = None) -> str | None:
 
 _DOTENV = _load_dotenv(_ENV_PATH)
 
-ORANGELINE_IMAGE_NAME = _env("ORANGELINE_IMAGE_NAME", _DEFAULT_IMAGE)
+ORANGELINE_IMAGE_NAME = _env("ORANGELINE_IMAGE_NAME", None)
+if not ORANGELINE_IMAGE_NAME:
+    # .env is gitignored and not mounted in the container. Local deploy
+    # must set this; the remote import reads it back from image.env().
+    if modal.is_local():
+        raise ValueError("ORANGELINE_IMAGE_NAME is not set")
+    ORANGELINE_IMAGE_NAME = "already-built"
 DOCKER_TOKEN_SECRET = _env("DOCKER_TOKEN_SECRET", _DEFAULT_TOKEN_SECRET)
 # ^ Modal secret with keys REGISTRY_USERNAME + REGISTRY_PASSWORD, upserted
 #   by `uv run python scripts/write_secrets.py` as SUBCONSCIOUS_DOCKERHUB.
@@ -79,19 +84,19 @@ CACHE_MOUNT = "/mnt/sgl-warm-cache"     # empty path; Modal cannot overlay a non
 IMAGE_WARM_CACHE = "/opt/sgl-warm-cache"  # baked kernel cache in the serve image; leave it in place
 
 # Model settings — local paths on WEIGHTS_VOLUME (not Hugging Face repo ids).
-MODEL_PATH = "/models/glm-5.2-nvfp4"
+MODEL_PATH = "/models/glm-5.2-fp8"
 DRAFT_MODEL_PATH = "/models/glm-5.2-fp8-dflash-v2"
 CHAT_TEMPLATE = "/sgl-workspace/sglang/deploy/chat_templates/glm5.2.jinja"
-APP_NAME = "glm-5-2-marathon"
+APP_NAME = "glm-5-2-fp8-marathon"
 
-# Compute — 4x B200 node, host RAM for the hierarchical KV-cache offload tier.
-GPU = "B200:4"                     # 4x B200 = 768 GB VRAM. VRAM is fixed by type+count, not tunable.
+# Compute — 8x B200 node, host RAM for the hierarchical KV-cache offload tier.
+GPU = "B200:8"                     # 8x B200 = 1536 GB VRAM. VRAM is fixed by type+count, not tunable.
 CPU = 64.0                         # Modal hard cap: 64 physical cores
 # MEMORY_MIB = 1_572_864  # max
 MEMORY_MIB = 1_363_149            # 1.3 TiB; easier to schedule than 1.5 TiB (Modal cap is 1,650,688 MiB)
 PORT = 8000
-TP = 4                             # tensor-parallel == GPU count
-STARTUP_TIMEOUT = 3000            # GLM-5.2 nvfp4 load + cuda-graph(bs=96) build is slow
+TP = 8                             # tensor-parallel == GPU count
+STARTUP_TIMEOUT = 3000            # GLM-5.2 fp8 load + cuda-graph(bs=64) build is slow
 RUN_TIMEOUT = 86400               # max container lifetime per cold cycle; watch for a Modal cap at deploy
 
 # ---------------------------------------------------------------------------
@@ -113,6 +118,9 @@ image = (
     )
     .env(
         {
+            # So the container re-import of deploy.py sees the same value
+            # (.env is gitignored and is not present at /root).
+            "ORANGELINE_IMAGE_NAME": ORANGELINE_IMAGE_NAME,
             # Use the image's baked kernel cache in place. Do not copy it onto the
             # Volume (that is a silent multi-GB network copy and looks like a hang).
             "SGLANG_CACHE_DIR": f"{IMAGE_WARM_CACHE}/sglang",
@@ -152,7 +160,7 @@ cache_vol = modal.Volume.from_name(CACHE_VOLUME, create_if_missing=True)
     max_containers=1,
     timeout=RUN_TIMEOUT,
 )
-@modal.concurrent(max_inputs=96)
+@modal.concurrent(max_inputs=64)
 @modal.web_server(port=PORT, startup_timeout=STARTUP_TIMEOUT, label=APP_NAME)
 def serve():
     """Start sglang and leave it listening on PORT.
@@ -168,13 +176,13 @@ def serve():
         "--chat-template", CHAT_TEMPLATE,
         "--tool-call-parser", "glm47",
         "--subconscious-x-mode",
-        "--mem-fraction-static", "0.82",
-        "--enable-hierarchical-cache", "--hicache-ratio", "8",
+        "--mem-fraction-static", "0.80",
+        "--enable-hierarchical-cache", "--hicache-ratio", "3",
         "--hicache-io-backend", "direct",
         "--hicache-mem-layout", "page_first_direct",
         "--hicache-write-policy", "write_back",
-        "--subconscious-x-st-buffer-size", "5",
-        "--subconscious-x-min-span-length", "3",
+        "--subconscious-x-st-buffer-size", "10",
+        "--subconscious-x-min-span-length", "2",
         "--speculative-algorithm", "DFLASH",
         "--speculative-draft-model-path", DRAFT_MODEL_PATH,
         "--speculative-num-draft-tokens", "12",
@@ -183,9 +191,9 @@ def serve():
         "--subconscious-leaf-only",
         "--stream-response-default-include-usage",
         "--trust-remote-code", "--enable-cache-report",
-        "--cuda-graph-max-bs", "96",
+        "--cuda-graph-max-bs", "64",
         "--cuda-graph-backend-prefill", "disabled",
-        "--max-running-requests", "96",
+        "--max-running-requests", "64",
         "--reasoning-parser", "glm45",
     ]
     print("[serve] launching:", " ".join(cmd), flush=True)

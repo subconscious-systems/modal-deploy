@@ -2,13 +2,13 @@
 
 Downloads both checkpoints sglang needs at serve time:
 
-  - nvidia/GLM-5.2-NVFP4              -> /models/glm-5.2-nvfp4
+  - zai-org/GLM-5.2-FP8                   -> /models/glm-5.2-fp8
   - SubconsciousDev/glm-5.2-fp8-dflash-v2 -> /models/glm-5.2-fp8-dflash-v2
 
-Both are gated, so this needs the `SUBCONSCIOUS_HF_TOKEN` Modal Secret
-(key: HF_TOKEN), upserted by write_secrets.py. After this job, deploy.py
-points `--model-path` and `--speculative-draft-model-path` at those local
-dirs so the GPU container never talks to Hub at startup.
+The DFLASH draft is gated, so this needs the `SUBCONSCIOUS_HF_TOKEN` Modal
+Secret (key: HF_TOKEN), upserted by write_secrets.py. After this job,
+deploy.py points `--model-path` and `--speculative-draft-model-path` at
+those local dirs so the GPU container never talks to Hub at startup.
 
 Run:
     uv run python scripts/write_secrets.py
@@ -22,9 +22,9 @@ HF_SECRET = "SUBCONSCIOUS_HF_TOKEN"
 
 MODELS = [
     {
-        "repo_id": "nvidia/GLM-5.2-NVFP4",
-        "revision": "aec724e8c7b8ee9db3b48c01c320f63f9cdaf8aa",
-        "local_dir": "/models/glm-5.2-nvfp4",
+        "repo_id": "zai-org/GLM-5.2-FP8",
+        "revision": None,
+        "local_dir": "/models/glm-5.2-fp8",
     },
     {
         "repo_id": "SubconsciousDev/glm-5.2-fp8-dflash-v2",
@@ -47,7 +47,7 @@ vol = modal.Volume.from_name(WEIGHTS_VOLUME, create_if_missing=True)
     image=image,
     volumes={WEIGHTS_MOUNT: vol},
     secrets=[modal.Secret.from_name(HF_SECRET, required_keys=["HF_TOKEN"])],
-    timeout=7200,
+    timeout=14400,
     cpu=8.0,
     memory=64 * 1024,
 )
