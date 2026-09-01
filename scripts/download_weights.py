@@ -47,7 +47,7 @@ vol = modal.Volume.from_name(WEIGHTS_VOLUME, create_if_missing=True)
     image=image,
     volumes={WEIGHTS_MOUNT: vol},
     secrets=[modal.Secret.from_name(HF_SECRET, required_keys=["HF_TOKEN"])],
-    timeout=7200,
+    timeout=14400,
     cpu=8.0,
     memory=64 * 1024,
 )

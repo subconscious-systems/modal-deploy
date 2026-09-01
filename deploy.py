@@ -18,7 +18,7 @@ Flow
    `/models/glm-5.2-fp8-dflash-v2` — no Hub fetch at GPU startup.
 3. `uv run modal deploy deploy.py` -> Modal pulls the serve image (auth via
    DOCKER_TOKEN_SECRET), mounts the weights + warm-cache volumes, and runs
-   the sglang launch server on 4x B200.
+   the sglang launch server on Nx B200.
    `uv run modal serve deploy.py` does the same but hot-reloads for dev.
 """
 from __future__ import annotations
@@ -36,7 +36,6 @@ import modal
 # ---------------------------------------------------------------------------
 
 _ENV_PATH = Path(__file__).resolve().parent / ".env"
-_DEFAULT_IMAGE = "subconsciouslabs/sglang-baseten:sm_100-v0.12"
 _DEFAULT_TOKEN_SECRET = "SUBCONSCIOUS_DOCKERHUB"
 
 
@@ -61,7 +60,13 @@ def _env(name: str, default: str | None = None) -> str | None:
 
 _DOTENV = _load_dotenv(_ENV_PATH)
 
-ORANGELINE_IMAGE_NAME = _env("ORANGELINE_IMAGE_NAME", _DEFAULT_IMAGE)
+ORANGELINE_IMAGE_NAME = _env("ORANGELINE_IMAGE_NAME", None)
+if not ORANGELINE_IMAGE_NAME:
+    # .env is gitignored and not mounted in the container. Local deploy
+    # must set this; the remote import reads it back from image.env().
+    if modal.is_local():
+        raise ValueError("ORANGELINE_IMAGE_NAME is not set")
+    ORANGELINE_IMAGE_NAME = "already-built"
 DOCKER_TOKEN_SECRET = _env("DOCKER_TOKEN_SECRET", _DEFAULT_TOKEN_SECRET)
 # ^ Modal secret with keys REGISTRY_USERNAME + REGISTRY_PASSWORD, upserted
 #   by `uv run python scripts/write_secrets.py` as SUBCONSCIOUS_DOCKERHUB.
@@ -113,6 +118,9 @@ image = (
     )
     .env(
         {
+            # So the container re-import of deploy.py sees the same value
+            # (.env is gitignored and is not present at /root).
+            "ORANGELINE_IMAGE_NAME": ORANGELINE_IMAGE_NAME,
             # Use the image's baked kernel cache in place. Do not copy it onto the
             # Volume (that is a silent multi-GB network copy and looks like a hang).
             "SGLANG_CACHE_DIR": f"{IMAGE_WARM_CACHE}/sglang",
