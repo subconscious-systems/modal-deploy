@@ -181,7 +181,7 @@ def serve():
         "--hicache-io-backend", "direct",
         "--hicache-mem-layout", "page_first_direct",
         "--hicache-write-policy", "write_back",
-        "--subconscious-x-st-buffer-size", "5",
+        "--subconscious-x-st-buffer-size", "10",
         "--subconscious-x-min-span-length", "3",
         "--speculative-algorithm", "DFLASH",
         "--speculative-draft-model-path", DRAFT_MODEL_PATH,
