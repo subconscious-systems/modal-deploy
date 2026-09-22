@@ -9,11 +9,13 @@ Docker Hub repository.
 modal-deploy/
 ├── pyproject.toml          # uv env (Python 3.12, modal CLI)
 ├── deploy.py               # Modal app: pulls serve image, runs sglang on 8x B200
+├── deploy_glm5_3.py         # GLM-5.3-FP8 deployment with EAGLE
 ├── Dockerfile              # (optional/legacy) thin serving layer — not used when pulling the prebuilt serve image
 ├── .env.example            # template: HF token, Docker Hub creds, image name
 ├── scripts/
 │   ├── write_secrets.py    # idempotent upsert of .env secrets into Modal
 │   ├── download_weights.py # one-time job: pull GLM-5.2-FP8 + DFLASH draft into a Volume
+│   ├── download_weights_glm5_3.py # one-time job: pull GLM-5.3-FP8 into the same Volume
 │   ├── test_endpoint.py    # send a sample chat-completion request to the deployed endpoint
 │   ├── run_claude.sh       # launch Claude Code against the Modal endpoint
 │   └── run_opencode.sh     # launch OpenCode against the Modal endpoint
@@ -48,6 +50,19 @@ uv run modal run scripts/download_weights.py
 # 5. Deploy the model
 uv run modal deploy deploy.py
 ```
+
+## GLM-5.3 with EAGLE
+
+After the shared environment and secret setup above, use the GLM-5.3 scripts:
+
+```bash
+uv run modal run scripts/download_weights_glm5_3.py
+uv run modal deploy deploy_glm5_3.py
+```
+
+The download job populates `/models/glm-5.3-fp8` on `glm_weights_vol` from
+`zai-org/GLM-5.3-FP8`. The EAGLE deployment uses this checkpoint without a
+separate DFLASH download.
 
 ## Test the endpoint
 
@@ -132,4 +147,3 @@ uv run modal secret list                  # SUBCONSCIOUS_HF_TOKEN, SUBCONSCIOUS_
   `/opt/sgl-warm-cache`).
 - **Timeout:** `RUN_TIMEOUT = 86400` (container lifetime per cold cycle). If
   Modal rejects this at deploy (server-side cap), lower it and redeploy.
-
