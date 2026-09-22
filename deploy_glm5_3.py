@@ -187,7 +187,6 @@ def serve():
         "--cuda-graph-max-bs", "64",
         "--cuda-graph-backend-prefill", "disabled",
         "--max-running-requests", "64",
-        "--reasoning-parser", "glm45",
     ]
     print("[serve] launching:", " ".join(cmd), flush=True)
     subprocess.Popen(cmd, stdout=sys.stdout, stderr=sys.stderr)
